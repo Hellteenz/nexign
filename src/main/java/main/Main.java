@@ -1,14 +1,12 @@
 package main;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import CDR_Comutator.CDR_Comutator;
+
+import java.io.*;
 
 public class Main {
-    public static void main(String[] args) {
-
-    }
+    public static void main(String[] args){
+        CDR_Comutator cdr_comutator = new CDR_Comutator();
+        cdr_comutator.generate();
+       }
 }
