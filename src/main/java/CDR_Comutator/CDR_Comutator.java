@@ -43,16 +43,16 @@ public class CDR_Comutator {
     /** Процедура генерации CDR файла и заполнения таблицы в базе данных.
      * Таблица очищается перед заполнением, чтобы избежать повторения уникальных идентификаторов.
      * @see CDR_Comutator#resetCDRTable()
-     * @see CDR_Comutator#generateSetOfCDRs()
-     * @see CDR_Comutator#createDBofCDRs()
+     * @see CDR_Comutator#generateCurrCDR(Long, int)()
+     * @see CDR_Comutator#createCDR_DB(int)()
      * */
-    public void generate() {
+    public void generateCDR() {
         Random rand = new Random();
         for (int i = 1; i <= 12; i++) {
-            long startTime = rand.nextLong(MIN_CALLING_TIME, MAX_CALLING_TIME);
+            long startTime = rand.nextLong(MIN_TIME_TARIFFICATION, MAX_TIME_OF_TARIFFICATION);
             resetCDRTable();
-            generateCDR(startTime, i);
-            createDBofCDRs(i);
+            generateCurrCDR(startTime, i);
+            createCDR_DB(i);
         }
     }
 
@@ -64,11 +64,9 @@ public class CDR_Comutator {
         String query_delete = "DROP TABLE IF EXISTS CALLS;";
         String query_create = "CREATE TABLE CALLS(ID INT PRIMARY KEY, TYPE VARCHAR(2), MSISDN VARCHAR(11), " +
                 "STARTCALLIN VARCHAR(255), ENDCALLIN VARCHAR(255));";
-        Connection connection = ConnectionH2.getConnection();
         try {
             connection.createStatement().execute(query_delete);
             connection.createStatement().execute(query_create);
-            connection.close();
         } catch (SQLException e) {
             System.out.println(e.getMessage());
         }
@@ -76,14 +74,14 @@ public class CDR_Comutator {
 
     /** Процедура заполнения таблицы в базе данных.
      * Таблица содержит все те же записи, что и файлы.
-     * @see CDR_Comutator#insertFile(int, Statement, AtomicInteger)
+     * @see CDR_Comutator#insertCDRFile(int, Statement, AtomicInteger)
      * @see Connection
      * */
-    private void createDBofCDRs(int num) {
+    private void createCDR_DB(int num) {
         try (Statement statement = connection.createStatement()){
             AtomicInteger currRow = new AtomicInteger(0);
             try {
-                insertFile(num, statement, currRow);
+                insertCDRFile(num, statement, currRow);
                 int[] result = statement.executeBatch();
                 connection.commit();
             } catch (BatchUpdateException e) {
@@ -100,11 +98,11 @@ public class CDR_Comutator {
      * @param numOfFile номер файла для обработки
      * @param statement sql оператор
      * @param currRow номер строки, на которой остановилась запись
-     * @see CDR_Comutator#insertFragment(String, Statement, AtomicInteger)
+     * @see CDR_Comutator#insertStr(String, Statement, AtomicInteger)
      * @see FileCreator#getPath(int)
      * @see Statement
      *  */
-    private void insertFile(int numOfFile, Statement statement, AtomicInteger currRow) {
+    private void insertCDRFile(int numOfFile, Statement statement, AtomicInteger currRow) {
         String path = FileCreator.getPath(numOfFile);
         FileReader fileReader = null;
 
@@ -117,7 +115,7 @@ public class CDR_Comutator {
         try (BufferedReader bufferedReader = new BufferedReader(fileReader)) {
             for(String line; (line = bufferedReader.readLine()) != null; ) {
                 currRow.addAndGet(1);
-                insertFragment(line, statement, currRow);
+                insertStr(line, statement, currRow);
             }
         } catch (IOException e) {
             System.out.println(e.getMessage());
@@ -127,15 +125,15 @@ public class CDR_Comutator {
 
     /** Процедура обработки строки CDR файла.
      *  На основе данных из строки формируется SQL запрос, который добавляется в пакет для обработки.
-     *  @param line обрабатываемая строка из файла
+     *  @param str обрабатываемая строка из файла
      *  @param statement sql оператор
      *  @param currRow номер строки, на которой остановилась запись
      *  @see Connection
      *  @see Statement
-     *  @see CDR_Comutator#addToBatch(Statement, String)
+     *  @see CDR_Comutator#addToPack(Statement, String)
      *  */
-    private void insertFragment(@NotNull String line, @NotNull Statement statement, @NotNull AtomicInteger currRow) {
-        String[] data = line.replace("\n", "").split(",");
+    private void insertStr(@NotNull String str, @NotNull Statement statement, @NotNull AtomicInteger currRow) {
+        String[] data = str.replace("\n", "").split(",");
         String query = "INSERT INTO CALLS(ID, TYPE, MSISDN, STARTCALLIN, ENDCALLIN) VALUES\n" +
                 "(" +
                 currRow.get() + "," +
@@ -144,7 +142,7 @@ public class CDR_Comutator {
                 data[2] + "," +
                 data[3] +
                 ");";
-        addToBatch(statement, query);
+        addToPack(statement, query);
     }
 
     /** Процедура добавления запроса в пакет для обрадотки.
@@ -152,7 +150,7 @@ public class CDR_Comutator {
      * @param query sql запрос
      * @see Statement
      * */
-    private void addToBatch(@NotNull Statement statement, @NotNull String query) {
+    private void addToPack(@NotNull Statement statement, @NotNull String query) {
         try {
             statement.addBatch(query);
         } catch (SQLException e) {
@@ -164,15 +162,15 @@ public class CDR_Comutator {
      *  Количество записей определяется случайным образом
      * @param startTime начало периода времени для генерации
      * @param numOfFile конец периода времени для генерации
-     * @see CDR_Comutator#getRandomMSISDNs(int)
+     * @see CDR_Comutator#getRandPhoneNum(int)
      * @see FileCreator#getPath(int)
      * @see FileCreator#createFile(int)
-     * @see CDR_Comutator#generateFragment(Long, Long, String)
+     * @see CDR_Comutator#generateCurrStr(Long, Long, String)
      *  */
-    private void generateCDR(Long startTime, int numOfFile) throws  RuntimeException{
+    private void generateCurrCDR(Long startTime, int numOfFile) throws  RuntimeException{
         Random rand = new Random();
         int amountToGenerate = rand.nextInt(50, PACK_SIZE);
-        List<String> msisdNs = getRandomMSISDNs(amountToGenerate);
+        List<String> msisdns = getRandPhoneNum(amountToGenerate);
         String path = FileCreator.getPath(numOfFile);
         FileCreator.createFile(numOfFile);
 
@@ -180,7 +178,7 @@ public class CDR_Comutator {
                 new OutputStreamWriter(new FileOutputStream(path), StandardCharsets.UTF_8)
         )) {
             for (int i = 0; i < amountToGenerate; i++) {
-                writer.write(generateFragment(startTime, startTime + SEC_IN_MONTH, msisdNs.get(i)));
+                writer.write(generateCurrStr(startTime, startTime + SEC_IN_MONTH, msisdns.get(i)));
             }
         }
         catch (IOException e) {
@@ -194,8 +192,8 @@ public class CDR_Comutator {
      * @param msisdn номер мобильного абонента
      * @return Строка файла
      * */
-    private @NotNull String generateFragment(Long timeOfBeginning, Long timeOfEnding, String msisdn) {
-        String type = generateRandomType();
+    private @NotNull String generateCurrStr(Long timeOfBeginning, Long timeOfEnding, String msisdn) {
+        String type = getRandomType();
 
         Random rand = new Random();
         long startOfCall = rand.nextLong(timeOfBeginning, timeOfEnding);
@@ -209,14 +207,14 @@ public class CDR_Comutator {
 
     /** Функция получения списка случайных номеров телефонов из локальной базы данных.
      * @param amount необходиммое количество номеров
-     * @see CDR_Comutator#getOneMSISDN(Connection, List)
+     * @see CDR_Comutator#getOnePhoneNum(Connection, List)
      * @return Список заданной размерности случайных номеров
      * */
-    private @NotNull List<String> getRandomMSISDNs(int amount) throws RuntimeException{
+    private @NotNull List<String> getRandPhoneNum(int amount) throws RuntimeException{
         List<String> numbers = new ArrayList<>(amount);
         try {
             for (int i = 1; i <= amount; i++) {
-                getOneMSISDN(connection, numbers);
+                getOnePhoneNum(connection, numbers);
             }
         }  catch (SQLException e) {
             System.out.println("Cannot generate random numbers");
@@ -228,7 +226,7 @@ public class CDR_Comutator {
      * @param connection соединение с базой данных
      * @param numbers список номеров
      * */
-    private void getOneMSISDN(@NotNull Connection connection, List<String> numbers) throws SQLException {
+    private void getOnePhoneNum(@NotNull Connection connection, List<String> numbers) throws SQLException {
         Random rand = new Random();
         int ranNum = rand.nextInt(1, 21);
         String query = String.format("SELECT MSISDN FROM MSISDNS WHERE id=%2d;", ranNum);
@@ -240,7 +238,7 @@ public class CDR_Comutator {
     /** Функция генерации случайного типа звонка.
      * @return Тип звонка
      * */
-    private @NotNull String generateRandomType() {
+    private @NotNull String getRandomType() {
         Random rand = new Random();
         int randInt = rand.nextInt(1, 3);
         return "0" + randInt;
